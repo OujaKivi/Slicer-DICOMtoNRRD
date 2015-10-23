@@ -121,7 +121,7 @@ class DicomHeaderParser:
         return dicomHeaderInformationTable
     
       
-    def WriteToCSVFile(self, outputDir=None, outputCSVFileNameSuffix='_Dicom_Header_Information.csv'):
+    def WriteToCSVFile(self, outputDir=None, outputCSVFileNameSuffix='_DICOM-Metadata.csv'):
         #Write dicomHeaderInformationTable to a CSV file in dicomDir
         if outputDir is None: outputDir = self.dicomDir
      

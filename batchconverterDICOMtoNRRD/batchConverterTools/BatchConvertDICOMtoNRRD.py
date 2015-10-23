@@ -61,55 +61,56 @@ def UpdateProgressBar(progressBar, patientID, index):
     progressBar.setValue(index)
     slicer.app.processEvents()
  
-def batchConvert(inputPatientDir, outputPatientDir, fileFormat):
+def batchConvert(inputPatientDir, outputPatientDir, contourFilters, inferPatientID, fileFormat):
     logTime = str(datetime.now().strftime(('%Y-%m-%d--%H-%M')))
     logFilePath = os.path.join(outputPatientDir, 'BatchConverterLog_' + logTime + '.txt')
     
     PatientDirs = [patDir for patDir in glob.glob(os.path.join(inputPatientDir, '*')) if os.path.isdir(patDir)]
     
     dblogic = DatabaseHandler(inputPatientDir)
-    RTStructConversionlogic = BatchRTStructConversionLogic()   
+    RTStructConversionlogic = BatchRTStructConversionLogic(contourFilters)   
     progressBar = InitializeProgressBar(len(PatientDirs))
     
     for index,patientDir in enumerate(PatientDirs):
         patientDirName = os.path.basename(patientDir) 
         UpdateProgressBar(progressBar, patientDirName, index)              
-        with open(logFilePath,mode='a') as logfile: logfile.write("\nPROCESSING: " + patientDirName)
+        with open(logFilePath,mode='a') as logfile: logfile.write("\nPROCESSING: " + patientDirName + '\n')
         
         # Import Directory into ctkDICOMIndexer. If that fails, instantiate a new database file
         # Check if import added any new patients to the database
-        try:
-            patientsAdded = dblogic.ImportStudy(patientDir)
+        try: patientsAdded = dblogic.ImportStudy(patientDir)
         except:
             dblogic.SetAndOpenNewDatabase()
             patientsAdded = dblogic.ImportStudy(patientDir)       
         if patientsAdded == 0:    
-            with open(logFilePath,mode='a') as logfile: logfile.write("\tPATIENTERROR: No new patients added to database from directory: " + patientDirName)
+            with open(logFilePath,mode='a') as logfile: logfile.write("\tPATIENTERROR: No new patients added to database from directory: " + patientDirName + '\n')
             slicer.mrmlScene.Clear(0)
             continue
-        
+
         detailsPopup = slicer.modules.dicom.widgetRepresentation().self().detailsPopup
         for patient in patientsAdded:
-            try:    
-                studiesList = slicer.dicomDatabase.studiesForPatient(patient)
+            try: studiesList = slicer.dicomDatabase.studiesForPatient(patient)
             except:
-                with open(logFilePath,mode='a') as logfile: logfile.write("\tSTUDYERROR: could not find studies for Patient: " + patientDirName + ' with DB Index: ' + patient)
+                with open(logFilePath,mode='a') as logfile: logfile.write("\tSTUDYERROR: could not find studies for Patient: " + patientDirName + ' with DB Index: ' + patient + '\n')
                 slicer.mrmlScene.Clear(0)
                 continue
                       
             for study in studiesList:
-                try:    
-                    seriesListStudy = slicer.dicomDatabase.seriesForStudy(study)
+                try: seriesListStudy = slicer.dicomDatabase.seriesForStudy(study)
                 except:
-                    with open(logFilePath,mode='a') as logfile: logfile.write("\tSERIESERROR: could not find Series for Study: " + study + " for Patient: " + patientDirName)
+                    with open(logFilePath,mode='a') as logfile: logfile.write("\tSERIESERROR: could not find Series for Study: " + study + " for Patient: " + patientDirName + '\n')
                     slicer.mrmlScene.Clear(0)
                     continue
                 
                 # Create Output Patient Directory
-                try: patientID = str(dblogic.GetDicomHeaderAttribute(seriesListStudy[0],'0010,0020'))
-                except: patientID = patientDirName
-                outputPatientDir = str(os.path.join(outputPatientDir,patientID))
-                if not os.path.exists(outputPatientDir): os.mkdir(outputPatientDir)
+                if inferPatientID == "metadata":
+                    try: patientID = str(dblogic.GetDicomHeaderAttribute(seriesListStudy[0],'0010,0020'))
+                    except: patientID = "Unknown_" + str(index) 
+                elif inferPatientID == "inputdir":      
+                    try: patientID = patientDirName
+                    except: patientID = "Unknown_" + str(index)    
+                outputPatientIDDir = str(os.path.join(outputPatientDir,patientID))
+                if not os.path.exists(outputPatientIDDir): os.mkdir(outputPatientIDDir)
                 #else: # check if output has already been saved to folder
                 #    with open(logFilePath,mode='a') as logfile: logfile.write('\tSKIPPING: ' + patientDirName + ' with ID: ' + patientID)
                 #    slicer.mrmlScene.Clear(0)
@@ -122,7 +123,7 @@ def batchConvert(inputPatientDir, outputPatientDir, fileFormat):
                 except: studyDescription = "Unknown"    
                 studyDateDirName = studyDate + '_' + studyDescription
                 studyDateDirName = ''.join(x for x in studyDateDirName if x not in "-',;\/:*?<>|")         
-                outputStudyDateDir = str(os.path.join(patientDir,studyDateDirName))      
+                outputStudyDateDir = str(os.path.join(outputPatientIDDir,studyDateDirName))      
                 if not os.path.exists(outputStudyDateDir): os.mkdir(outputStudyDateDir)
                 
                 # Create Reconstructions, Segmentations, and Resources Directories
@@ -157,25 +158,27 @@ def batchConvert(inputPatientDir, outputPatientDir, fileFormat):
                 ################ 
                 """
                 
-                ### Load Images from Study into Slicer
+                # Load Images from Study into Slicer
                 listVolumes = dblogic.LoadPatientsIntoSlicer(study)          
-                if not listVolumes: 
-                    with open(logFilePath, mode='a') as logfile: logfile.write("\tIMAGEERROR: could not Parse Images: " + patientDirName + ', study: ' + studyDate)     
-                # Perform intensity correction on images and save them         
-                # listVolumes = [VolumeIntensityCorrection(volume, logFilePath=logFilePath) if volume.GetImageData().GetScalarRange()[0] > 32000.0 else volume for volume in listVolumes]      
-                SaveVolumes(listVolumes, outputReconstructionsDir, fileFormat, logFilePath)
-                
-                # Get label map contours         
-                listLabelMapContours = RTStructConversionlogic.ConvertContoursToLabelmap(listVolumes, logFilePath)                  
-                if len(listLabelMapContours) > 0:                 
-                    RTStructConversionlogic.SaveLabelMapContours(listLabelMapContours, outputSegmentationsDir, fileFormat, logFilePath)            
+                if listVolumes: 
+                    # Perform intensity correction on images and save them         
+                    # listVolumes = [VolumeIntensityCorrection(volume, logFilePath=logFilePath) if volume.GetImageData().GetScalarRange()[0] > 32000.0 else volume for volume in listVolumes]      
+                    SaveVolumes(listVolumes, outputReconstructionsDir, fileFormat, logFilePath)  
                 else:
-                    with open(logFilePath,mode='a') as logfile: logfile.write("\tRTSTRUCTERROR: could not Parse RTSTRUCTs: " + patientDirName + ', study: ' + studyDate)  
+                    with open(logFilePath, mode='a') as logfile: logfile.write("\tIMAGEERROR: could not Parse Images: " + patientDirName + ', study: ' + studyDate + '\n')
                 
+                if contourFilters:
+                    # Get label map contours         
+                    listLabelMapContours = RTStructConversionlogic.ConvertContoursToLabelmap(listVolumes, logFilePath)                  
+                    if len(listLabelMapContours) > 0:                 
+                        RTStructConversionlogic.SaveLabelMapContours(listLabelMapContours, outputSegmentationsDir, fileFormat, logFilePath)            
+                    else:
+                        with open(logFilePath,mode='a') as logfile: logfile.write("\tRTSTRUCTERROR: could not Parse RTSTRUCTs: " + patientDirName + ', study: ' + studyDate + '\n')  
+                    
                 # Clear data within Slicer
                 slicer.mrmlScene.Clear(0)
             slicer.mrmlScene.Clear(0)    
         slicer.mrmlScene.Clear(0)         
     slicer.mrmlScene.Clear(0)
-    self.progressBar.close()
-    self.progressBar = None
+    progressBar.close()
+    progressBar = None
