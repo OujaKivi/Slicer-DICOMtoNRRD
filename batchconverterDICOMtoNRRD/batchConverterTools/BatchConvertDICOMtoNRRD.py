@@ -13,13 +13,14 @@ import pdb
 from BatchRTStructConversion import BatchRTStructConversionLogic
 from DatabaseHandler import DatabaseHandler
 
-def SaveVolumes(listVolumes, outputReconstructionsDir, fileFormat, logFilePath):
+def SaveVolumes(listVolumes, outputDir, converterSettings, logFilePath):
     volumesLogic = slicer.vtkSlicerVolumesLogic()
-    for volume in listVolumes:     
-        volumesLogic.CenterVolume(volume)
+    for volume in listVolumes:
+        if converterSettings["center"]:
+            volumesLogic.CenterVolume(volume)
         savename = volume.GetName() 
-        savename = ''.join(x for x in savename if x not in "',;\/:*?<>|") + fileFormat       
-        savevol = slicer.util.saveNode(volume, os.path.join(outputReconstructionsDir, savename), properties={"filetype": fileFormat})
+        savename = ''.join(x for x in savename if x not in "',;\/:*?<>|") + converterSettings["fileformat"]       
+        savevol = slicer.util.saveNode(volume, os.path.join(outputDir, savename), properties={"filetype": converterSettings["fileformat"]})
         if not savevol:
             with open(logFilePath,mode='a') as logfile: logfile.write("\tSAVEERROR: Could not save data" + volume.GetName() + '\n') 
 
@@ -46,7 +47,17 @@ def VolumeIntensityCorrection(volume, logFilePath):
     
     with open(logFilePath,mode='a') as logfile: logfile.write("\tCORRECTED: Image intensity values corrected: " + volumeCorrected.GetName() + '\n')
     return volumeCorrected
-  
+
+def SaveLabelMapContours(labelMapContours, outputSegmentationsDir, fileFormat, logFilePath):    
+    volumesLogic = slicer.vtkSlicerVolumesLogic()
+    for labelMapContour in labelMapContours:
+        volumesLogic.CenterVolume(labelMapContour)
+        savenamelabel = labelMapContour.GetName()
+        savenamelabel = ''.join(x for x in savenamelabel if x not in "',;\/:*?<>|") + fileFormat
+        savelabel = slicer.util.saveNode(labelMapContour, os.path.join(outputSegmentationsDir, savenamelabel), properties={"filetype": fileFormat})
+        if not savelabel:
+            with open(logFilePath,mode='a') as logfile: logfile.write("\tSAVEERROR: Could not save data" + labelMapContour.GetName() + '\n')     
+        
 def InitializeProgressBar(numDirectories):
     # initialize Progress Bar
     progressBar = qt.QProgressDialog(slicer.util.mainWindow())
@@ -61,14 +72,21 @@ def UpdateProgressBar(progressBar, patientID, index):
     progressBar.setValue(index)
     slicer.app.processEvents()
  
-def batchConvert(inputPatientDir, outputPatientDir, contourFilters, inferPatientID, fileFormat):
+def batchConvert(inputPatientDir, outputPatientDir, contourFilters, converterSettings):
     logTime = str(datetime.now().strftime(('%Y-%m-%d--%H-%M')))
     logFilePath = os.path.join(outputPatientDir, 'BatchConverterLog_' + logTime + '.txt')
     
     PatientDirs = [patDir for patDir in glob.glob(os.path.join(inputPatientDir, '*')) if os.path.isdir(patDir)]
     
     dblogic = DatabaseHandler(inputPatientDir)
-    RTStructConversionlogic = BatchRTStructConversionLogic(contourFilters)   
+    
+    if converterSettings['convertcontours']=='All':
+        RTStructConversionlogic = BatchRTStructConversionLogic()
+        RTStructConversionlogic.SetContourFilters(convertAll=True)
+    elif converterSettings['convertcontours']=='Select':
+        RTStructConversionlogic = BatchRTStructConversionLogic()
+        RTStructConversionlogic.SetContourFilters(contourFilters=contourFilters)
+        
     progressBar = InitializeProgressBar(len(PatientDirs))
     
     for index,patientDir in enumerate(PatientDirs):
@@ -103,10 +121,10 @@ def batchConvert(inputPatientDir, outputPatientDir, contourFilters, inferPatient
                     continue
                 
                 # Create Output Patient Directory
-                if inferPatientID == "metadata":
+                if converterSettings["inferpatientid"] == "metadata":
                     try: patientID = str(dblogic.GetDicomHeaderAttribute(seriesListStudy[0],'0010,0020'))
                     except: patientID = "Unknown_" + str(index) 
-                elif inferPatientID == "inputdir":      
+                elif converterSettings["inferpatientid"] == "inputdir":      
                     try: patientID = patientDirName
                     except: patientID = "Unknown_" + str(index)    
                 outputPatientIDDir = str(os.path.join(outputPatientDir,patientID))
@@ -163,15 +181,15 @@ def batchConvert(inputPatientDir, outputPatientDir, contourFilters, inferPatient
                 if listVolumes: 
                     # Perform intensity correction on images and save them         
                     # listVolumes = [VolumeIntensityCorrection(volume, logFilePath=logFilePath) if volume.GetImageData().GetScalarRange()[0] > 32000.0 else volume for volume in listVolumes]      
-                    SaveVolumes(listVolumes, outputReconstructionsDir, fileFormat, logFilePath)  
+                    SaveVolumes(listVolumes, outputReconstructionsDir, converterSettings, logFilePath)  
                 else:
                     with open(logFilePath, mode='a') as logfile: logfile.write("\tIMAGEERROR: could not Parse Images: " + patientDirName + ', study: ' + studyDate + '\n')
                 
-                if contourFilters:
+                if (converterSettings['convertcontours'] != 'None') and (len(contourFilters) != 0):
                     # Get label map contours         
                     listLabelMapContours = RTStructConversionlogic.ConvertContoursToLabelmap(listVolumes, logFilePath)                  
                     if len(listLabelMapContours) > 0:                 
-                        RTStructConversionlogic.SaveLabelMapContours(listLabelMapContours, outputSegmentationsDir, fileFormat, logFilePath)            
+                        SaveVolumes(listLabelMapContours, outputSegmentationsDir, converterSettings, logFilePath)            
                     else:
                         with open(logFilePath,mode='a') as logfile: logfile.write("\tRTSTRUCTERROR: could not Parse RTSTRUCTs: " + patientDirName + ', study: ' + studyDate + '\n')  
                     

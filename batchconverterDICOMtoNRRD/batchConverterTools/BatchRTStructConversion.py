@@ -7,10 +7,18 @@ import pdb
 from slicer.ScriptedLoadableModule import *
     
 class BatchRTStructConversionLogic(ScriptedLoadableModuleLogic):
-    def __init__(self, contourFilters):
+    def __init__(self):
         ScriptedLoadableModuleLogic.__init__(self)
-        self.contourFilters = contourFilters
-  
+        self.convertAll = True
+        
+    def SetContourFilters(self, contourFilters=None, convertAll=False):
+        if convertAll:
+            self.convertAll = True
+            self.contourFilters = None
+        else:
+            self.convertAll = False
+            self.contourFilters = contourFilters
+        
     def ConvertContoursToLabelmap(self, listVolumes, logFilePath):
         import vtkSlicerContoursModuleLogic
         
@@ -21,9 +29,11 @@ class BatchRTStructConversionLogic(ScriptedLoadableModuleLogic):
         if not contourNodes: return None
         
         for contourNode in contourNodes.values():
-            # Can check for specific contour here i.e. if 'TUMOR' in contourNode.GetName().upper():
-            #if 'GTV' in contourNode.GetName().upper() and '+' not in contourNode.GetName():
-            contourFilter = self.TestContourNode(contourNode.GetName(), self.contourFilters )
+            if self.convertAll:
+                contourFilter = {'Name': None}
+            else:
+                contourFilter = self.TestContourNode(contourNode.GetName(), self.contourFilters )
+                
             if contourFilter:
                 with open(logFilePath,mode='a') as logfile: logfile.write('\tCONVERTING: Contour: ' + contourNode.GetName() + '\n')
                 
@@ -52,13 +62,16 @@ class BatchRTStructConversionLogic(ScriptedLoadableModuleLogic):
                 contourNode.GetLabelmapImageData()
                 contourLabelmapNode = vtkSlicerContoursModuleLogic.vtkSlicerContoursModuleLogic.ExtractLabelmapFromContour(contourNode)
                 if contourFilter['Name']: contourLabelmapNode.SetName(referenceVolume.GetName() + '_' + contourFilter['Name']) 
-                else: contourLabelmapNode.SetName(referenceVolume.GetName() + '_' + contourLabelmapNode.GetName())
+                else: contourLabelmapNode.SetName(referenceVolume.GetName() + '_labelMap_' + contourNode.GetName())
                 
-                #Resample and Center Label Map
+                # Resample and Center Label Map
                 if referenceVolume.GetSpacing() != contourLabelmapNode.GetSpacing():
                     self.ResampleScalarVolumeCLI(referenceVolume, contourLabelmapNode)
                     with open(logFilePath,mode='a') as logfile:logfile.write("\tRESAMPLED: Label Resampled to Image and Centered: " + contourLabelmapNode.GetName() + '\n')
-                    
+                
+                # Binarize Label Map
+                contourLabelmapNode = self.BinarizeLabelMap(contourLabelmapNode, logFilePath)
+                
                 # Append contour to list
                 labelmapsToSave.append(contourLabelmapNode)
         return labelmapsToSave
@@ -96,17 +109,6 @@ class BatchRTStructConversionLogic(ScriptedLoadableModuleLogic):
         resamplevolume = slicer.modules.resamplescalarvolume 
         return (slicer.cli.run(resamplevolume, None, parameters, wait_for_completion = True))
               
-    def SaveLabelMapContours(self, labelMapContours, outputSegmentationsDir, fileFormat, logFilePath):    
-        volumesLogic = slicer.vtkSlicerVolumesLogic()
-        for labelMapContour in labelMapContours:
-            labelMapContour = self.BinarizeLabelMap(labelMapContour, logFilePath)
-            volumesLogic.CenterVolume(labelMapContour)
-            savenamelabel = labelMapContour.GetName()
-            savenamelabel = ''.join(x for x in savenamelabel if x not in "',;\/:*?<>|") + fileFormat
-            savelabel = slicer.util.saveNode(labelMapContour, os.path.join(outputSegmentationsDir, savenamelabel), properties={"filetype": fileFormat})
-            if not savelabel:
-                with open(logFilePath,mode='a') as logfile: logfile.write("\tSAVEERROR: Could not save data" + labelMapContour.GetName() + '\n')     
-            
     def BinarizeLabelMap(self, labelNode, logFilePath):
         labelNodeImageData = labelNode.GetImageData()
         change = slicer.vtkImageLabelChange()

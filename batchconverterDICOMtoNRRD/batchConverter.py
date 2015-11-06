@@ -42,6 +42,11 @@ class batchConverterWidget:
             self.parent.show()
     
         self.inputPatientDir = self.outputPatientDir = {}
+        self.converterSettings = {}
+        self.converterSettings['convertcontours'] = 'None'
+        self.converterSettings["fileformat"] = ".nrrd"
+        self.converterSettings["inferpatientid"] = "metadata"
+        self.converterSettings["center"] = True
       
     def setup(self):
         self.reloadButton = qt.QPushButton("Reload")
@@ -59,34 +64,49 @@ class batchConverterWidget:
         self.BatchConvertFormLayout = qt.QFormLayout(self.BatchConvertCollapsibleButton)
     
         # Input 1: Input Directory selector
-        self.input1Frame = qt.QFrame(self.BatchConvertCollapsibleButton)
-        self.input1Frame.setLayout(qt.QHBoxLayout())
-        self.BatchConvertFormLayout.addWidget(self.input1Frame)
-        
-        self.input1Selector = qt.QLabel("Input Directory (DICOM):  ", self.input1Frame)
-        self.input1Frame.layout().addWidget(self.input1Selector)
+        self.input1Selector = qt.QLabel("Input Directory (DICOM):  ", self.BatchConvertCollapsibleButton)
         self.input1Button = qt.QPushButton("Select Main Input Directory of DICOM files")
         self.input1Button.toolTip = "Select main directory with DICOM files (folder names are patient names)"
         self.input1Button.enabled = True
-        self.input1Frame.layout().addWidget(self.input1Button)
+        self.BatchConvertFormLayout.addRow(self.input1Selector, self.input1Button)
     
-        # Input 2: Output Directory selector
-        self.input2Frame = qt.QFrame(self.BatchConvertCollapsibleButton)
-        self.input2Frame.setLayout(qt.QHBoxLayout())
-        self.BatchConvertFormLayout.addWidget(self.input2Frame)
-        
-        self.input2Selector = qt.QLabel("Output Directory:  ", self.input2Frame)
-        self.input2Frame.layout().addWidget(self.input2Selector)
+        # Input 2: Output Directory selector       
+        self.input2Selector = qt.QLabel("Output Directory:  ", self.BatchConvertCollapsibleButton)
         self.input2Button = qt.QPushButton("Select Main Output Directory")
         self.input2Button.toolTip = "Select main directory for output NRRD or NIFTI files (folder names are patient names)"
         self.input2Button.enabled = True
-        self.input2Frame.layout().addWidget(self.input2Button)
-    
+        self.BatchConvertFormLayout.addRow(self.input2Selector, self.input2Button)
+        
+        # RTStruct Conversion
+        self.contourConvertLabel = qt.QLabel("Convert DICOM-RT Contours:  ", self.BatchConvertCollapsibleButton)
+        
+        self.contourConvertSelectFrame = qt.QFrame(self.BatchConvertCollapsibleButton)
+        self.contourConvertSelectFrame.setLayout(qt.QHBoxLayout())
+        self.contourConvertGroup = qt.QButtonGroup(self.contourConvertSelectFrame)
+        self.noConvertButton = qt.QRadioButton("None")
+        self.noConvertButton.checked = True
+        self.allConvertButton = qt.QRadioButton("All")
+        self.selectConvertButton = qt.QRadioButton("Select")
+        self.contourConvertGroup.addButton(self.noConvertButton)
+        self.contourConvertGroup.addButton(self.allConvertButton)
+        self.contourConvertGroup.addButton(self.selectConvertButton)
+        self.contourConvertSelectFrame.layout().addWidget(self.noConvertButton)
+        self.contourConvertSelectFrame.layout().addWidget(self.allConvertButton)
+        self.contourConvertSelectFrame.layout().addWidget(self.selectConvertButton)
+        self.BatchConvertFormLayout.layout().addRow(self.contourConvertLabel, self.contourConvertSelectFrame)
+        
+        self.contourConvertCollapsibleButton = ctk.ctkCollapsibleButton(self.BatchConvertCollapsibleButton)
+        self.contourConvertCollapsibleButton.text = "Select Contours to Convert"
+        self.BatchConvertFormLayout.addRow(self.contourConvertCollapsibleButton)
+        self.contourConvertCollapsibleButton.enabled = False 
+        self.contourConvertCollapsibleButton.collapsed = True 
+        self.contourConvertFormLayout = qt.QFormLayout(self.contourConvertCollapsibleButton)
+        
         # Keywords to catch RTStruct Structures
-        self.contoursFrame = qt.QFrame(self.BatchConvertCollapsibleButton)
+        self.contoursFrame = qt.QFrame(self.contourConvertCollapsibleButton)
         self.contoursFrame.setLayout(qt.QVBoxLayout())
         self.contoursFrame.setFrameStyle(2)
-        self.BatchConvertFormLayout.addWidget(self.contoursFrame)
+        self.contourConvertFormLayout.addWidget(self.contoursFrame)
         
         self.addContourButton = qt.QPushButton("Add Contour to convert from RTStruct (separate keywords by comma)", self.contoursFrame)      
         self.keywordsScrollWidget = qt.QWidget()        
@@ -96,12 +116,12 @@ class batchConverterWidget:
         self.keywordsScroll.setWidget(self.keywordsScrollWidget)        
         self.contoursFrame.layout().addWidget(self.keywordsScroll)
         self.contoursFrame.layout().addWidget(self.addContourButton) 
-                      
+               
         # Settings Collapsible Button
-        self.settingsCollapsibleButton = ctk.ctkCollapsibleButton(self.BatchConvertCollapsibleButton)
+        self.settingsCollapsibleButton = ctk.ctkCollapsibleButton()
         self.settingsCollapsibleButton.text = "Settings"
         self.settingsCollapsibleButton.setLayout(qt.QFormLayout())     
-        self.BatchConvertFormLayout.addWidget(self.settingsCollapsibleButton)
+        self.layout.addWidget(self.settingsCollapsibleButton)
         
         # NRRD or NIFTI Radio Buttons
         self.fileFormatLabel = qt.QLabel("Output File Format:  ", self.settingsCollapsibleButton)
@@ -117,22 +137,6 @@ class batchConverterWidget:
         self.fileFormatSelectFrame.layout().addRow(self.nrrdButton, self.niftiButton)        
         self.settingsCollapsibleButton.layout().addRow(self.fileFormatLabel, self.fileFormatSelectFrame)
         
-        # Parse and Save DICOM Metadata to CSV
-        self.metadataExtractLabel = qt.QLabel("DICOM Metadata Extraction", self.settingsCollapsibleButton)
-        self.metadataExtractLabel.toolTip = "Extract and Save all DICOM Metadata to a CSV file"
-        
-        self.metadataExtractSelecttFrame = qt.QFrame(self.settingsCollapsibleButton)
-        self.metadataExtractSelecttFrame.setLayout(qt.QFormLayout())                
-        self.metadataExtractGroup = qt.QButtonGroup(self.metadataExtractSelecttFrame)
-        self.extractCSVButton = qt.QRadioButton("CSV")
-        self.extractCSVButton.checked = True
-        #self.extractJSONButton = qt.QRadioButton("JSON")        
-        self.doNotExtractButton = qt.QRadioButton("None")
-        self.metadataExtractGroup.addButton(self.extractCSVButton)
-        self.metadataExtractGroup.addButton(self.doNotExtractButton)
-        self.metadataExtractSelecttFrame.layout().addRow(self.extractCSVButton, self.doNotExtractButton)       
-        self.settingsCollapsibleButton.layout().addRow(self.metadataExtractLabel, self.metadataExtractSelecttFrame)
-        
         # Use input DICOM Patient Directory names as PatientID or infer from DICOM Metadata
         self.patientIDLabel = qt.QLabel("Infer Patient IDs from:  ", self.settingsCollapsibleButton)
         self.patientIDLabel.toolTip = "Use input DICOM Patient Directory names as PatientID or infer from DICOM Metadata"
@@ -147,20 +151,58 @@ class batchConverterWidget:
         self.patientIDGroup.addButton(self.inputDirButton )
         self.patientIDSelectFrame.layout().addRow(self.metadataButton, self.inputDirButton)        
         self.settingsCollapsibleButton.layout().addRow(self.patientIDLabel, self.patientIDSelectFrame)
-              
+        
+        # Center Volumes option
+        self.centerVolumesLabel = qt.QLabel("Center All Volumes:  ", self.settingsCollapsibleButton)
+        
+        self.centerVolumesSelectFrame = qt.QFrame(self.settingsCollapsibleButton)
+        self.centerVolumesSelectFrame.setLayout(qt.QFormLayout())
+        self.centerVolumesGroup = qt.QButtonGroup(self.centerVolumesSelectFrame)
+        self.centerVolumesButton = qt.QRadioButton("Yes")
+        self.centerVolumesButton.checked = True
+        self.noCenterButton = qt.QRadioButton("No")
+        self.centerVolumesGroup.addButton(self.centerVolumesButton)
+        self.centerVolumesGroup.addButton(self.noCenterButton)
+        self.centerVolumesSelectFrame.layout().addRow(self.centerVolumesButton, self.noCenterButton)        
+        self.settingsCollapsibleButton.layout().addRow(self.centerVolumesLabel, self.centerVolumesSelectFrame)
+        
+        # Parse and Save DICOM Metadata to CSV
+        self.metadataExtractLabel = qt.QLabel("DICOM Metadata Extraction", self.settingsCollapsibleButton)
+        self.metadataExtractLabel.toolTip = "Extract and Save all DICOM Metadata to a CSV file"
+        
+        self.metadataExtractSelectFrame = qt.QFrame(self.settingsCollapsibleButton)
+        self.metadataExtractSelectFrame.setLayout(qt.QFormLayout())                
+        self.metadataExtractGroup = qt.QButtonGroup(self.metadataExtractSelectFrame)
+        self.extractCSVButton = qt.QRadioButton("CSV")
+        self.extractCSVButton.checked = True
+        #self.extractJSONButton = qt.QRadioButton("JSON")        
+        self.doNotExtractButton = qt.QRadioButton("None")
+        self.metadataExtractGroup.addButton(self.extractCSVButton)
+        self.metadataExtractGroup.addButton(self.doNotExtractButton)
+        self.metadataExtractSelectFrame.layout().addRow(self.extractCSVButton, self.doNotExtractButton)       
+        self.settingsCollapsibleButton.layout().addRow(self.metadataExtractLabel, self.metadataExtractSelectFrame)
+                   
         # Apply Batch Convert button
-        self.applyBatchButton = qt.QPushButton("Apply Batch Convert", self.BatchConvertCollapsibleButton)
+        self.applyBatchButton = qt.QPushButton("Apply Batch Convert")
         self.applyBatchButton.toolTip = "Batch convert DICOM to NRRD or NIFTI files" 
-        self.BatchConvertFormLayout.addWidget(self.applyBatchButton)
+        self.layout.addWidget(self.applyBatchButton)
         self.applyBatchButton.enabled = False
         
         #---------------------------------------------------------
         # Connections
         self.input1Button.connect('clicked(bool)', self.onInput1Button)
         self.input2Button.connect('clicked(bool)', self.onInput2Button)
+        self.selectConvertButton.toggled.connect(self.selectConvert)
         self.addContourButton.connect('clicked(bool)', self.addContourFilterWidget)
         self.applyBatchButton.connect('clicked(bool)', self.onBatchApply) 
-    
+        
+    def selectConvert(self):
+        if self.selectConvertButton.enabled:
+            self.contourConvertCollapsibleButton.enabled = True
+            self.contourConvertCollapsibleButton.collapsed = False
+        else:
+            self.contourConvertCollapsibleButton.enabled = False
+            self.contourConvertCollapsibleButton.collapsed = True
   
     def onInput1Button(self):
         self.inputPatientDir = qt.QFileDialog.getExistingDirectory()
@@ -186,14 +228,23 @@ class batchConverterWidget:
     def onBatchApply(self):
         self.applyBatchButton.enabled = False
         
-        if self.nrrdButton.checked: self.fileFormat = ".nrrd"
-        elif self.niftiButton.checked: self.fileFormat = ".nii"
+        if self.nrrdButton.checked: self.converterSettings["fileformat"] = ".nrrd"
+        elif self.niftiButton.checked: self.converterSettings["fileformat"] = ".nii"
         
-        if self.metadataButton.checked: self.inferPatientID = "metadata"
-        elif self.inputDirButton.checked: self.inferPatientID = "inputdir"
+        if self.metadataButton.checked: self.converterSettings["inferpatientid"] = "metadata"
+        elif self.inputDirButton.checked: self.converterSettings["inferpatientid"] = "inputdir"
         
-        self.contourFilters = self.getContourFilters()
-        #batchConverterTools.BatchConvertDICOMtoNRRD.batchConvert(self.inputPatientDir, self.outputPatientDir, self.contourFilters, self.inferPatientID, self.fileFormat)
+        if self.noConvertButton.checked:
+            self.converterSettings['convertcontours'] = 'None'
+            self.contourFilters = None
+        elif self.allConvertButton.checked:
+            self.converterSettings['convertcontours'] = 'All'
+            self.contourFilters = None
+        elif self.selectConvertButton.checked:
+            self.converterSettings['convertcontours'] = 'Select'
+            self.contourFilters = self.getContourFilters()
+            
+        batchConverterTools.BatchConvertDICOMtoNRRD.batchConvert(self.inputPatientDir, self.outputPatientDir, self.contourFilters, self.converterSettings)
         
         if self.extractCSVButton.checked:
             DicomHeaderParserInstance = batchConverterTools.MetadataExtractor.DicomHeaderParser(self.inputPatientDir)
