@@ -1,0 +1,1 @@
+start "Convert" "E:\Users\vn061\Desktop\Slicer 4.4.0\Slicer.exe" "--no-splash" "--no-main-window" "--show-python-interactor" "--python-code" "import slicer;rbc=slicer.modules.batchconverter;rbc.createNewWidgetRepresentation();rbcwidget=slicer.modules.batchConverterWidget;rbcwidget.__init__();"
