@@ -185,7 +185,7 @@ def batchConvert(inputPatientDir, outputPatientDir, contourFilters, converterSet
                 else:
                     with open(logFilePath, mode='a') as logfile: logfile.write("\tIMAGEERROR: could not Parse Images: " + patientDirName + ', study: ' + studyDate + '\n')
                 
-                if (converterSettings['convertcontours'] != 'None') and (len(contourFilters) != 0):
+                if (converterSettings['convertcontours'] != 'None') or (len(contourFilters) != 0):
                     # Get label map contours         
                     listLabelMapContours = RTStructConversionlogic.ConvertContoursToLabelmap(listVolumes, logFilePath)                  
                     if len(listLabelMapContours) > 0:                 

@@ -159,8 +159,8 @@ class batchConverterWidget:
         self.centerVolumesSelectFrame.setLayout(qt.QFormLayout())
         self.centerVolumesGroup = qt.QButtonGroup(self.centerVolumesSelectFrame)
         self.centerVolumesButton = qt.QRadioButton("Yes")
-        self.centerVolumesButton.checked = True
         self.noCenterButton = qt.QRadioButton("No")
+        self.noCenterButton.checked = True
         self.centerVolumesGroup.addButton(self.centerVolumesButton)
         self.centerVolumesGroup.addButton(self.noCenterButton)
         self.centerVolumesSelectFrame.layout().addRow(self.centerVolumesButton, self.noCenterButton)        
@@ -236,10 +236,10 @@ class batchConverterWidget:
         
         if self.noConvertButton.checked:
             self.converterSettings['convertcontours'] = 'None'
-            self.contourFilters = None
+            self.contourFilters = []
         elif self.allConvertButton.checked:
             self.converterSettings['convertcontours'] = 'All'
-            self.contourFilters = None
+            self.contourFilters = []
         elif self.selectConvertButton.checked:
             self.converterSettings['convertcontours'] = 'Select'
             self.contourFilters = self.getContourFilters()
