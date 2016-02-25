@@ -46,15 +46,10 @@ class batchConverterWidget:
         self.converterSettings['convertcontours'] = 'None'
         self.converterSettings["fileformat"] = ".nrrd"
         self.converterSettings["inferpatientid"] = "metadata"
-        self.converterSettings["center"] = True
-      
-    def setup(self):
-        self.reloadButton = qt.QPushButton("Reload")
-        self.reloadButton.toolTip = "Reload this module."
-        self.reloadButton.name = "Radiomics Reload"
-        self.layout.addWidget(self.reloadButton)
-        self.reloadButton.connect('clicked()', self.onReload)
-    
+        self.converterSettings["centerimages"] = False
+        self.converterSettings["centerlabels"] = False
+        
+    def setup(self):    
         #---------------------------------------------------------
         # Batch Covert DICOM to NRRD
         self.BatchConvertCollapsibleButton = ctk.ctkCollapsibleButton()
@@ -152,19 +147,33 @@ class batchConverterWidget:
         self.patientIDSelectFrame.layout().addRow(self.metadataButton, self.inputDirButton)        
         self.settingsCollapsibleButton.layout().addRow(self.patientIDLabel, self.patientIDSelectFrame)
         
-        # Center Volumes option
-        self.centerVolumesLabel = qt.QLabel("Center All Volumes:  ", self.settingsCollapsibleButton)
+        # Center Images option
+        self.centerImagesLabel = qt.QLabel("Center Images:  ", self.settingsCollapsibleButton)
         
-        self.centerVolumesSelectFrame = qt.QFrame(self.settingsCollapsibleButton)
-        self.centerVolumesSelectFrame.setLayout(qt.QFormLayout())
-        self.centerVolumesGroup = qt.QButtonGroup(self.centerVolumesSelectFrame)
-        self.centerVolumesButton = qt.QRadioButton("Yes")
-        self.noCenterButton = qt.QRadioButton("No")
-        self.noCenterButton.checked = True
-        self.centerVolumesGroup.addButton(self.centerVolumesButton)
-        self.centerVolumesGroup.addButton(self.noCenterButton)
-        self.centerVolumesSelectFrame.layout().addRow(self.centerVolumesButton, self.noCenterButton)        
-        self.settingsCollapsibleButton.layout().addRow(self.centerVolumesLabel, self.centerVolumesSelectFrame)
+        self.centerImagesSelectFrame = qt.QFrame(self.settingsCollapsibleButton)
+        self.centerImagesSelectFrame.setLayout(qt.QFormLayout())
+        self.centerImagesGroup = qt.QButtonGroup(self.centerImagesSelectFrame)
+        self.centerImagesButton = qt.QRadioButton("Yes")
+        self.noCenterImagesButton = qt.QRadioButton("No")
+        self.noCenterImagesButton.checked = True
+        self.centerImagesGroup.addButton(self.centerImagesButton)
+        self.centerImagesGroup.addButton(self.noCenterImagesButton)
+        self.centerImagesSelectFrame.layout().addRow(self.centerImagesButton, self.noCenterImagesButton)        
+        self.settingsCollapsibleButton.layout().addRow(self.centerImagesLabel, self.centerImagesSelectFrame)
+        
+        # Center Labels option
+        self.centerLabelsLabel = qt.QLabel("Center Labels:  ", self.settingsCollapsibleButton)
+        
+        self.centerLabelsSelectFrame = qt.QFrame(self.settingsCollapsibleButton)
+        self.centerLabelsSelectFrame.setLayout(qt.QFormLayout())
+        self.centerLabelsGroup = qt.QButtonGroup(self.centerLabelsSelectFrame)
+        self.centerLabelsButton = qt.QRadioButton("Yes")
+        self.noCenterLabelsButton = qt.QRadioButton("No")
+        self.noCenterLabelsButton.checked = True
+        self.centerLabelsGroup.addButton(self.centerLabelsButton)
+        self.centerLabelsGroup.addButton(self.noCenterLabelsButton)
+        self.centerLabelsSelectFrame.layout().addRow(self.centerLabelsButton, self.noCenterLabelsButton)        
+        self.settingsCollapsibleButton.layout().addRow(self.centerLabelsLabel, self.centerLabelsSelectFrame)
         
         # Parse and Save DICOM Metadata to CSV
         self.metadataExtractLabel = qt.QLabel("DICOM Metadata Extraction", self.settingsCollapsibleButton)
@@ -243,6 +252,16 @@ class batchConverterWidget:
         elif self.selectConvertButton.checked:
             self.converterSettings['convertcontours'] = 'Select'
             self.contourFilters = self.getContourFilters()
+        
+        if self.noCenterImagesButton.checked: 
+            self.converterSettings["centerimages"] = False
+        else:    
+            self.converterSettings["centerimages"] = True
+            
+        if self.noCenterLabelsButton.checked:    
+            self.converterSettings["centerlabels"] = False
+        else:
+            self.converterSettings["centerlabels"] = True        
             
         #batchConverterTools.BatchConvertDICOMtoNRRD.batchConvert(self.inputPatientDir, self.outputPatientDir, self.contourFilters, self.converterSettings)
         batchConverterLogic = batchConverterTools.BatchConvertDICOMtoNRRD.BatchConverterLogic(self.inputPatientDir, self.outputPatientDir, self.contourFilters, self.converterSettings)
@@ -255,43 +274,6 @@ class batchConverterWidget:
             
         self.applyBatchButton.enabled = True
         self.applyBatchButton.text = "Apply Batch Convert"
-
-    
-        
-    def onReload(self, moduleName="batchConverter"):
-        #Generic reload method for any scripted module.
-        #ModuleWizard will subsitute correct default moduleName.
-    
-        import imp, sys, os, slicer
-    
-        widgetName = moduleName + "Widget"
-     
-        # reload the source code
-        # - set source file path
-        # - load the module to the global space
-        filePath = eval('slicer.modules.%s.path' % moduleName.lower())
-        p = os.path.dirname(filePath)
-        if not sys.path.__contains__(p):
-          sys.path.insert(0,p)
-        fp = open(filePath, "r")
-        globals()[moduleName] = imp.load_module(
-            moduleName, fp, filePath, ('.py', 'r', imp.PY_SOURCE))
-        fp.close()
-     
-        # rebuild the widget
-        # - find and hide the existing widget
-        # - create a new widget in the existing parent
-        # parent = slicer.util.findChildren(name='%s Reload' % moduleName)[0].parent()
-        parent = self.parent
-        for child in parent.children():
-          try:
-            child.hide()
-          except AttributeError:
-            pass
-        globals()[widgetName.lower()] = eval(
-            'globals()["%s"].%s(parent)' % (moduleName, widgetName))
-        globals()[widgetName.lower()].setup()
-
     
 class ContourFilterWidget(qt.QWidget):
     def __init__(self, parent=None):
@@ -305,7 +287,6 @@ class ContourFilterWidget(qt.QWidget):
         self.deleteButton.connect('clicked()', self.delete) 
         
         layout = qt.QHBoxLayout()
-        layout.addWidget(self.contourName)
         layout.addWidget(self.inputKeywords)
         layout.addWidget(self.excludeKeywords)
         layout.addWidget(self.deleteButton)

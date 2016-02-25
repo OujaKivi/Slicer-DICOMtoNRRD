@@ -108,11 +108,14 @@ class BatchConverterLogic():
 
         return outputReconstructionsDir, outputSegmentationsDir, outputResourcesDir
 
-    def saveVolumes(self, listVolumes, outputDir, islabelMap=False):
+    def saveVolumes(self, listVolumes, outputDir, isLabelMap=False):
         volumesLogic = slicer.vtkSlicerVolumesLogic()
         for volume in listVolumes:
-            if self.converterSettings["center"] and islabelMap:
+            if self.converterSettings["centerlabels"] and isLabelMap:
                 volumesLogic.CenterVolume(volume)
+            elif self.converterSettings["centerimages"] and not isLabelMap:
+                volumesLogic.CenterVolume(volume)
+                
             savename = volume.GetName() 
             savename = ''.join(x for x in savename if x not in "',;\/:*?<>|") + self.converterSettings["fileformat"]       
             savevol = slicer.util.saveNode(volume, os.path.join(outputDir, savename), properties={"filetype": self.converterSettings["fileformat"]})
@@ -251,11 +254,11 @@ class BatchRTStructConversionLogic(ScriptedLoadableModuleLogic):
         
         for contourNode in contourNodes.values():
             if self.convertAll:
-                contourFilter = {'Name': None}
+                contourFilterTest = True
             else:
-                contourFilter = self.TestContourNode(contourNode.GetName(), self.contourFilters )
+                contourFilterTest = self.TestContourNode(contourNode.GetName(), self.contourFilters )
                 
-            if contourFilter:
+            if contourFilterTest:
                 with open(logFilePath,mode='a') as logfile: logfile.write('\tCONVERTING: Contour: ' + contourNode.GetName() + '\n')
                 
                 # Set referenced volume as rasterization reference 
@@ -280,7 +283,9 @@ class BatchRTStructConversionLogic(ScriptedLoadableModuleLogic):
                 with open(logFilePath,mode='a') as logfile: logfile.write("\tREFERENCED: Label: " + contourNode.GetName() + ' Reference: ' + referenceVolume.GetName() + '\n')
                 
                 # Perform conversion
+                x = vtkSlicerContoursModuleLogic.vtkSlicerContoursModuleLogic.GetIndexedLabelmapWithGivenGeometry(contourNode, referenceVolume, contourNode)
                 contourNode.GetLabelmapImageData()
+                
                 contourLabelmapNode = vtkSlicerContoursModuleLogic.vtkSlicerContoursModuleLogic.ExtractLabelmapFromContour(contourNode)
 
                 # Resample and Center Label Map
