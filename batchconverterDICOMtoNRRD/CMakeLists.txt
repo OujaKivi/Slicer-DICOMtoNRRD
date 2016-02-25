@@ -6,8 +6,6 @@ set(MODULE_PYTHON_SCRIPTS
   ${MODULE_NAME}.py
   batchConverterTools/__init__
   batchConverterTools/BatchConvertDICOMtoNRRD
-  batchConverterTools/BatchRTStructConversion
-  batchConverterTools/DatabaseHandler
   batchConverterTools/MetadataExtractor
   )
 

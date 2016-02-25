@@ -244,7 +244,9 @@ class batchConverterWidget:
             self.converterSettings['convertcontours'] = 'Select'
             self.contourFilters = self.getContourFilters()
             
-        batchConverterTools.BatchConvertDICOMtoNRRD.batchConvert(self.inputPatientDir, self.outputPatientDir, self.contourFilters, self.converterSettings)
+        #batchConverterTools.BatchConvertDICOMtoNRRD.batchConvert(self.inputPatientDir, self.outputPatientDir, self.contourFilters, self.converterSettings)
+        batchConverterLogic = batchConverterTools.BatchConvertDICOMtoNRRD.BatchConverterLogic(self.inputPatientDir, self.outputPatientDir, self.contourFilters, self.converterSettings)
+        batchConverterLogic.batchConvert()
         
         if self.extractCSVButton.checked:
             DicomHeaderParserInstance = batchConverterTools.MetadataExtractor.DicomHeaderParser(self.inputPatientDir)
@@ -295,8 +297,6 @@ class ContourFilterWidget(qt.QWidget):
     def __init__(self, parent=None):
         super(ContourFilterWidget, self).__init__(parent)
         
-        self.contourName = qt.QLineEdit("")
-        self.contourName.setPlaceholderText("Output Label Name")
         self.inputKeywords = qt.QLineEdit("")
         self.inputKeywords.setPlaceholderText("Search Keywords")
         self.excludeKeywords = qt.QLineEdit("")
@@ -318,7 +318,7 @@ class ContourFilterWidget(qt.QWidget):
         if self.excludeKeywords.text == '': excludeContourKeywords = []       
         else: excludeContourKeywords = [str(keyword.strip()) for keyword in self.excludeKeywords.text.split(',')]        
         
-        contourFilter = {"Name": str(self.contourName.text.strip()), "Include": inputContourKeywords, "Exclude": excludeContourKeywords}
+        contourFilter = {"Include": inputContourKeywords, "Exclude": excludeContourKeywords}
         
         return contourFilter
         
